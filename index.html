@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SSW Career Support Indonesia</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=Playfair+Display:wght@700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <!-- ── LOGIN ── -->
+    <div id="loginScreen">
+      <div class="login-box">
+        <div class="login-logo">日本語の言葉</div>
+        <div class="login-title">特定技能の言葉</div>
+        <div class="login-sub">日本へ行きましょう</div>
+        <div class="login-field">
+          <label>Username</label>
+          <input
+            type="text"
+            id="loginUser"
+            placeholder="Masukkan username"
+            autocomplete="username"
+          />
+        </div>
+        <div class="login-field">
+          <label>Password</label>
+          <input
+            type="password"
+            id="loginPass"
+            placeholder="Masukkan password"
+            autocomplete="current-password"
+          />
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <button class="btn-login" onclick="doLogin()">
+          ログイン &mdash; Masuk
+        </button>
+      </div>
+    </div>
+
+    <!-- ── MAIN APP ── -->
+    <div class="app" id="mainApp">
+      <header>
+        <div class="header-user">
+          <div class="user-badge" id="userBadge">👤 —</div>
+          <button class="btn-logout" onclick="doLogout()">Keluar</button>
+        </div>
+        <div class="jp-title">日本語フラッシュカード</div>
+        <h1>Kosakata <span>Jepang</span></h1>
+        <p>
+          Flip kartu &bull; Tandai hafalan &bull; Progres tersimpan per akun
+        </p>
+      </header>
+
+      <div class="progress-section">
+        <div class="progress-info">
+          <div class="label">Sudah Hafal</div>
+          <div class="count" id="countHafal">
+            0 <span id="countTotal">/ 0 kata</span>
+          </div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-track">
+            <div
+              class="progress-bar-fill"
+              id="progressFill"
+              style="width: 0%"
+            ></div>
+          </div>
+          <div class="progress-bar-label" id="progressLabel">0%</div>
+        </div>
+        <button class="btn-reset" onclick="resetSession()">Reset Sesi</button>
+      </div>
+
+      <div class="tabs-wrap"><div class="tabs" id="categoryTabs"></div></div>
+
+      <div class="card-nav">
+        <div class="card-pos">
+          Kartu <strong id="cardCurrent">1</strong> dari
+          <strong id="cardTotal">1</strong>
+        </div>
+        <div class="dots-scroll">
+          <div class="dots-track" id="dotsTrack"></div>
+        </div>
+      </div>
+
+      <div class="flip-scene" onclick="flipCard()">
+        <div class="flip-card" id="flipCard">
+          <div class="card-face card-front">
+            <div class="cat-label" id="frontCat">—</div>
+            <div class="kanji" id="frontKanji">?</div>
+            <div class="romaji" id="frontRomaji">—</div>
+          </div>
+          <div class="card-face card-back">
+            <div class="cat-tag" id="backCat">—</div>
+            <div class="romaji" id="backRomaji">—</div>
+            <div class="arti" id="backArti">—</div>
+            <div class="kanji-small" id="backKanji">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="btn-action btn-lupa" onclick="markCard(false)">
+          ✗ Belum Hafal
+        </button>
+        <button class="btn-action btn-hafal" onclick="markCard(true)">
+          ✓ Sudah Hafal
+        </button>
+      </div>
+      <div class="nav-row">
+        <button class="btn-prev" onclick="prevCard()">&#8592; Kembali</button>
+        <button class="btn-next" onclick="nextCard()">Lanjut &#8594;</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="overlay" id="overlay">
+      <div class="big">🎉</div>
+      <h2>Kategori Selesai!</h2>
+      <p id="overlayMsg">Anda telah menyelesaikan semua kartu.</p>
+      <button class="btn-restart" onclick="restartCategory()">
+        Ulangi Kategori
+      </button>
+      <button
+        class="btn-restart"
+        style="
+          background: var(--surface);
+          color: var(--text);
+          border: 1px solid var(--border);
+        "
+        onclick="closeOverlay()"
+      >
+        Tutup
+      </button>
+    </div>
+
+    <script src="js/login.js"></script>
+    <script src="js/data.js"></script>
+    <script>
+      document.getElementById("loginPass").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doLogin();
+      });
+      document.getElementById("loginUser").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doLogin();
+      });
+
+      // ============================================================
+      // SESSION — per user, disimpan di sessionStorage
+      // ============================================================
+      function sessionKey() {
+        return "jp_fc_" + currentUser.username;
+      }
+      function loadUserSession() {
+        try {
+          return JSON.parse(sessionStorage.getItem(sessionKey())) || {};
+        } catch {
+          return {};
+        }
+      }
+      function saveUserSession(s) {
+        sessionStorage.setItem(sessionKey(), JSON.stringify(s));
+      }
+
+      // ============================================================
+      // APP STATE
+      // ============================================================
+      let userSession = {};
+      let activeCategory = "";
+      let currentIndex = 0;
+      let isFlipped = false;
+      let cards = [];
+
+      function startApp() {
+        document.getElementById("loginScreen").style.display = "none";
+        document.getElementById("mainApp").classList.add("visible");
+        document.getElementById("userBadge").textContent =
+          "👤 " + currentUser.displayName;
+        userSession = loadUserSession();
+        activeCategory = userSession.activeCategory || Object.keys(DATA)[0];
+        buildCategoryTabs();
+        loadCategory(activeCategory);
+      }
+
+      function loadCategory(cat) {
+        activeCategory = cat;
+        userSession.activeCategory = cat;
+        cards = DATA[cat].words;
+        if (
+          !userSession["order_" + cat] ||
+          userSession["order_" + cat].length !== cards.length
+        ) {
+          userSession["order_" + cat] = cards.map((_, i) => i);
+          userSession["marks_" + cat] = {};
+        }
+        currentIndex = userSession["ci_" + cat] || 0;
+        if (currentIndex >= cards.length) currentIndex = 0;
+        isFlipped = false;
+        document.getElementById("flipCard").classList.remove("flipped");
+        buildCategoryTabs();
+        renderCard();
+        renderDots();
+        updateProgress();
+        saveUserSession(userSession);
+      }
+
+      function getCard(i) {
+        return cards[userSession["order_" + activeCategory][i]];
+      }
+      function getMark(i) {
+        const marks = userSession["marks_" + activeCategory] || {};
+        return marks[userSession["order_" + activeCategory][i]];
+      }
+
+      // ============================================================
+      // UI
+      // ============================================================
+      function buildCategoryTabs() {
+        const el = document.getElementById("categoryTabs");
+        el.innerHTML = "";
+        Object.keys(DATA).forEach((cat) => {
+          const b = document.createElement("button");
+          b.className = "tab" + (activeCategory === cat ? " active" : "");
+          b.textContent = cat;
+          b.onclick = () => loadCategory(cat);
+          el.appendChild(b);
+        });
+      }
+
+      function renderCard() {
+        if (!cards.length) return;
+        const card = getCard(currentIndex);
+        if (!card) return;
+        const catColor = DATA[activeCategory].color;
+        document.getElementById("frontCat").textContent = activeCategory;
+        document.getElementById("frontCat").style.color = catColor;
+        document.getElementById("frontKanji").textContent = card.kanji;
+        document.getElementById("backCat").textContent = activeCategory;
+        document.getElementById("backCat").style.color = catColor;
+        document.getElementById("backRomaji").textContent = card.romaji;
+        document.getElementById("frontRomaji").textContent = card.romaji;
+        document.getElementById("backArti").textContent = card.arti;
+        document.getElementById("backKanji").textContent = card.kanji;
+        document.getElementById("cardCurrent").textContent = currentIndex + 1;
+        document.getElementById("cardTotal").textContent = cards.length;
+        userSession["ci_" + activeCategory] = currentIndex;
+        saveUserSession(userSession);
+      }
+
+      function renderDots() {
+        const track = document.getElementById("dotsTrack");
+        track.innerHTML = "";
+        cards.forEach((_, i) => {
+          const d = document.createElement("div");
+          d.className = "dot";
+          const m = getMark(i);
+          if (i === currentIndex) d.classList.add("current");
+          else if (m === true) d.classList.add("known");
+          else if (m === false) d.classList.add("unknown");
+          const idx = i;
+          d.onclick = () => {
+            currentIndex = idx;
+            isFlipped = false;
+            document.getElementById("flipCard").classList.remove("flipped");
+            renderCard();
+            renderDots();
+          };
+          track.appendChild(d);
+        });
+        const dots = track.querySelectorAll(".dot");
+        if (dots[currentIndex])
+          dots[currentIndex].scrollIntoView({
+            inline: "center",
+            behavior: "smooth",
+          });
+      }
+
+      function updateProgress() {
+        const marks = userSession["marks_" + activeCategory] || {};
+        const total = cards.length;
+        const hafal = Object.values(marks).filter((v) => v === true).length;
+        document.getElementById("countHafal").childNodes[0].textContent =
+          hafal + " ";
+        document.getElementById("countTotal").textContent =
+          "/ " + total + " kata";
+        const pct = total ? Math.round((hafal / total) * 100) : 0;
+        document.getElementById("progressFill").style.width = pct + "%";
+        document.getElementById("progressLabel").textContent = pct + "% hafal";
+      }
+
+      // ============================================================
+      // INTERACTIONS
+      // ============================================================
+      function flipCard() {
+        isFlipped = !isFlipped;
+        document
+          .getElementById("flipCard")
+          .classList.toggle("flipped", isFlipped);
+      }
+
+      function nextCard() {
+        if (currentIndex < cards.length - 1) {
+          currentIndex++;
+          isFlipped = false;
+          document.getElementById("flipCard").classList.remove("flipped");
+          renderCard();
+          renderDots();
+        } else {
+          showOverlay();
+        }
+      }
+
+      function prevCard() {
+        if (currentIndex > 0) {
+          currentIndex--;
+          isFlipped = false;
+          document.getElementById("flipCard").classList.remove("flipped");
+          renderCard();
+          renderDots();
+        }
+      }
+
+      function markCard(known) {
+        const marks = userSession["marks_" + activeCategory] || {};
+        const order = userSession["order_" + activeCategory];
+        marks[order[currentIndex]] = known;
+        userSession["marks_" + activeCategory] = marks;
+        saveUserSession(userSession);
+        showToast(
+          known ? "✓ Ditandai Hafal!" : "✗ Belum Hafal",
+          known ? "green" : "red",
+        );
+        updateProgress();
+        renderDots();
+        setTimeout(() => nextCard(), 600);
+      }
+
+      function resetSession() {
+        userSession["marks_" + activeCategory] = {};
+        userSession["order_" + activeCategory] = cards.map((_, i) => i);
+        userSession["ci_" + activeCategory] = 0;
+        currentIndex = 0;
+        isFlipped = false;
+        document.getElementById("flipCard").classList.remove("flipped");
+        saveUserSession(userSession);
+        renderCard();
+        renderDots();
+        updateProgress();
+        showToast("🔄 Sesi direset!", "green");
+      }
+
+      let toastTimer;
+      function showToast(msg, type) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.className = "toast show " + type;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
+      }
+
+      function showOverlay() {
+        const marks = userSession["marks_" + activeCategory] || {};
+        const hafal = Object.values(marks).filter((v) => v === true).length;
+        document.getElementById("overlayMsg").textContent =
+          "Selesai " +
+          cards.length +
+          ' kartu di "' +
+          activeCategory +
+          '". Hafal: ' +
+          hafal +
+          " / " +
+          cards.length +
+          " kata 🎌";
+        document.getElementById("overlay").classList.add("show");
+      }
+      function closeOverlay() {
+        document.getElementById("overlay").classList.remove("show");
+      }
+      function restartCategory() {
+        closeOverlay();
+        resetSession();
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (!currentUser) return;
+        if (e.key === "ArrowRight" || e.key === "l") nextCard();
+        if (e.key === "ArrowLeft" || e.key === "j") prevCard();
+        if (e.key === " " || e.key === "f") {
+          e.preventDefault();
+          flipCard();
+        }
+        if (e.key === "h") markCard(true);
+        if (e.key === "x") markCard(false);
+      });
+
+      // ============================================================
+      // INIT
+      // ============================================================
+      checkAutoLogin();
+    </script>
+  </body>
+</html>
