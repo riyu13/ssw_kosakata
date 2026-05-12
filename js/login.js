@@ -9,6 +9,7 @@ const USERS = [
   { username: "Rifai677", password: "pai123", displayName: "Pai" },
   { username: "SyuKron94", password: "SyuKron1234", displayName: "Pai" },
   { username: "H.kusumantoro", password: "123admin", displayName: "Heri" },
+  { username: "pricawwwshrn", password: "sandiarimasen", displayName: "Prisa" },
 ];
 
 // ============================================================
